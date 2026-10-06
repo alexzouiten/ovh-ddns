@@ -2,29 +2,22 @@ package config
 
 import (
 	"errors"
+	"fmt"
+	"log/slog"
 	"os"
-	"slices"
-	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+	"go.yaml.in/yaml/v3"
 )
 
 const (
-	PROG_NAME = "ovh-ddns"
+	configPathEnvVar = "OVH_DDNS_CONFIG_PATH"
+)
 
-	CONFIG_PATH_ENV_VAR = "OVH_DDNS_CONFIG_PATH"
-
-	LOG_LEVEL_FLAG    = "log-level"
-	DRY_RUN_FLAG      = "dry-run"
-	DOMAINS_FLAG      = "domains"
-	APP_KEY_FLAG      = "app-key"
-	APP_SECRET_FLAG   = "app-secret"
-	CONSUMER_KEY_FLAG = "consumer-key"
-
-	UPDATE_INTERVAL_FLAG = "update-interval"
-	UPDATE_TIMEOUT_FLAG  = "update-timeout"
+var (
+	// create a logger just to get the same formatting as the rest of the program
+	// when logging that we parse the yaml config in readConfigFile()
+	logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 )
 
 type Auth struct {
@@ -39,71 +32,85 @@ type Update struct {
 }
 
 type Config struct {
-	LogLevel string   `mapstructure:"log_level"`
-	DryRun   bool     `mapstructure:"dry_run"`
-	Domains  []string `mapstructure:"domains"`
-	Auth     Auth     `mapstructure:"auth"`
-	Update   Update   `mapstructure:"update"`
+	LogLevel slog.Level `mapstructure:"log_level"`
+	DryRun   bool       `mapstructure:"dry_run"`
+	Domains  []string   `mapstructure:"domains"`
+	Auth     Auth       `mapstructure:"auth"`
+	Update   Update     `mapstructure:"update"`
 }
 
-func configInit(cmd *cobra.Command) {
-	viper.SetConfigName(PROG_NAME)
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(os.Getenv(CONFIG_PATH_ENV_VAR))
-	viper.AddConfigPath(".")
-
-	viper.SetEnvPrefix("OVH_DDNS")
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-
-	viper.BindPFlag("log_level", cmd.PersistentFlags().Lookup(LOG_LEVEL_FLAG))
-	viper.BindPFlag("dry_run", cmd.PersistentFlags().Lookup(DRY_RUN_FLAG))
-	viper.BindPFlag("domains", cmd.PersistentFlags().Lookup(DOMAINS_FLAG))
-	viper.BindPFlag("auth.app_key", cmd.PersistentFlags().Lookup(APP_KEY_FLAG))
-	viper.BindPFlag("auth.app_secret", cmd.PersistentFlags().Lookup(APP_SECRET_FLAG))
-	viper.BindPFlag("auth.consumer_key", cmd.PersistentFlags().Lookup(CONSUMER_KEY_FLAG))
-	viper.BindPFlag("update.interval", cmd.PersistentFlags().Lookup(UPDATE_INTERVAL_FLAG))
-	viper.BindPFlag("update.timeout", cmd.PersistentFlags().Lookup(UPDATE_TIMEOUT_FLAG))
+func newConfig() Config {
+	return Config{
+		LogLevel: slog.LevelInfo,
+		DryRun:   false,
+		Update: Update{
+			Interval: time.Minute * 5,
+			Timeout:  time.Second * 30,
+		},
+	}
 }
 
-func LoadConfig(cmd *cobra.Command) (*Config, []error) {
-	configInit(cmd)
+func LoadConfig() (Config, error) {
+	cfg := newConfig()
 
-	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := errors.AsType[viper.ConfigFileNotFoundError](err); !ok {
-			return nil, []error{err}
+	if err := readConfigFile(&cfg, configPath()); err != nil {
+		return cfg, err
+	}
+
+	return cfg, nil
+}
+
+func configPath() string {
+	yamlPath := "./config.yaml"
+
+	if yamlPathEnvVar := os.Getenv(configPathEnvVar); yamlPathEnvVar != "" {
+		yamlPath = yamlPathEnvVar
+	}
+
+	return yamlPath
+}
+
+// readConfigFile parses the yaml config file and overwrite the default configuration with its content.
+// If the config file doesn't exist, then the default config is returned.
+func readConfigFile(cfg *Config, yamlPath string) error {
+	logger.Info("loading yaml configuration", "path", yamlPath)
+
+	f, err := os.Open(yamlPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		} else {
+			return fmt.Errorf("failed to open config file '%s': %w'", yamlPath, err)
 		}
 	}
 
-	viper.AutomaticEnv()
-
-	var cfg Config
-	if err := viper.Unmarshal(&cfg); err != nil {
-		return nil, []error{err}
+	// read at most 1MB
+	buf := make([]byte, 1_000_000)
+	n, err := f.Read(buf)
+	if err != nil {
+		return fmt.Errorf("failed to read config file '%s', %w", yamlPath, err)
 	}
 
-	if err := validate(&cfg); len(err) != 0 {
-		return nil, err
+	if err := yaml.Unmarshal(buf[:n], &cfg); err != nil {
+		return fmt.Errorf("failed to parse yaml config: %w", err)
 	}
 
-	return &cfg, nil
+	if errs := validate(cfg); len(errs) > 0 {
+		for err := range errs {
+			slog.Error("validation error", "error", err)
+		}
+		return errors.New("validation error")
+	}
+
+	return nil
 }
 
 func validate(cfg *Config) []error {
 	var err []error
 
-	err = validateLogLevel(cfg.LogLevel, err)
 	err = validateDomains(cfg.Domains, err)
 	err = validateAuth(cfg.Auth, err)
 	err = validateUpdate(cfg.Update, err)
-
-	return err
-}
-
-func validateLogLevel(logLevel string, err []error) []error {
-	possibleLogLevels := []string{"debug", "info", "warn", "error"}
-	if !slices.Contains(possibleLogLevels, logLevel) {
-		err = append(err, errors.New("log level must be either 'debug', 'info', 'warn' or 'error'"))
-	}
 
 	return err
 }

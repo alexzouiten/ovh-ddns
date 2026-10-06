@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"time"
 
 	"github.com/Zouizoui78/ovh-ddns/internal/fetcher"
 	"github.com/Zouizoui78/ovh-ddns/internal/model"
@@ -20,8 +19,6 @@ type Updater struct {
 
 	fetcher *fetcher.Fetcher
 	ovh     *ovh.Ovh
-
-	t *time.Ticker
 }
 
 func New(f *fetcher.Fetcher, o *ovh.Ovh, domains []string) *Updater {
