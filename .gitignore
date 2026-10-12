@@ -32,5 +32,5 @@ go.work.sum
 # .vscode/
 
 bin
-ovh-ddns.yaml
+config.yaml
 test-report.json

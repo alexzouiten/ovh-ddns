@@ -15,8 +15,10 @@ import (
 )
 
 func main() {
-	cfg, cfgErr := config.LoadConfig()
-	if cfgErr != nil {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+		logger.Error("failed to load config", "error", err)
 		os.Exit(1)
 	}
 
@@ -34,6 +36,7 @@ func main() {
 	ovh, err := ovh.New(cfg.Auth, cfg.DryRun)
 	if err != nil {
 		slog.Error("failed to create ovh client", "err", err)
+		os.Exit(1)
 	}
 	updater := updater.New(fetcher, ovh, cfg.Domains)
 

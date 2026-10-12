@@ -21,22 +21,22 @@ var (
 )
 
 type Auth struct {
-	AppKey      string `mapstructure:"app_key"`
-	AppSecret   string `mapstructure:"app_secret"`
-	ConsumerKey string `mapstructure:"consumer_key"`
+	AppKey      string `yaml:"app_key"`
+	AppSecret   string `yaml:"app_secret"`
+	ConsumerKey string `yaml:"consumer_key"`
 }
 
 type Update struct {
-	Interval time.Duration `mapstructure:"interval"`
-	Timeout  time.Duration `mapstructure:"timeout"`
+	Interval time.Duration `yaml:"interval"`
+	Timeout  time.Duration `yaml:"timeout"`
 }
 
 type Config struct {
-	LogLevel slog.Level `mapstructure:"log_level"`
-	DryRun   bool       `mapstructure:"dry_run"`
-	Domains  []string   `mapstructure:"domains"`
-	Auth     Auth       `mapstructure:"auth"`
-	Update   Update     `mapstructure:"update"`
+	LogLevel slog.Level `yaml:"log_level"`
+	DryRun   bool       `yaml:"dry_run"`
+	Domains  []string   `yaml:"domains"`
+	Auth     Auth       `yaml:"auth"`
+	Update   Update     `yaml:"update"`
 }
 
 func newConfig() Config {
@@ -77,11 +77,7 @@ func readConfigFile(cfg *Config, yamlPath string) error {
 
 	f, err := os.Open(yamlPath)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		} else {
-			return fmt.Errorf("failed to open config file '%s': %w'", yamlPath, err)
-		}
+		return err
 	}
 
 	// read at most 1MB
@@ -96,7 +92,7 @@ func readConfigFile(cfg *Config, yamlPath string) error {
 	}
 
 	if errs := validate(cfg); len(errs) > 0 {
-		for err := range errs {
+		for _, err := range errs {
 			slog.Error("validation error", "error", err)
 		}
 		return errors.New("validation error")
