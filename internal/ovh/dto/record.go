@@ -3,7 +3,7 @@ package dto
 import (
 	"net"
 
-	"github.com/Zouizoui78/ovh-ddns/internal/model"
+	"github.com/alexzouiten/ovh-ddns/internal/model"
 )
 
 type Record struct {

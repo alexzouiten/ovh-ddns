@@ -10,9 +10,9 @@ import (
 	"net"
 	"sync"
 
-	"github.com/Zouizoui78/ovh-ddns/internal/config"
-	"github.com/Zouizoui78/ovh-ddns/internal/model"
-	"github.com/Zouizoui78/ovh-ddns/internal/ovh/dto"
+	"github.com/alexzouiten/ovh-ddns/internal/config"
+	"github.com/alexzouiten/ovh-ddns/internal/model"
+	"github.com/alexzouiten/ovh-ddns/internal/ovh/dto"
 	ovhapi "github.com/ovh/go-ovh/ovh"
 	"golang.org/x/sync/errgroup"
 )

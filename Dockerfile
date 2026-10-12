@@ -1,20 +1,21 @@
-FROM --platform=$BUILDPLATFORM golang:1.26.3-alpine AS base
+FROM golang:1.27.1-alpine AS base
 
-WORKDIR /build
+RUN apk add --no-cache make
+
+WORKDIR /app
 COPY go.mod go.sum* ./
-RUN apk add --no-cache make && \
-    go mod download
+RUN go mod download
 COPY . .
 
 FROM base AS build
 RUN make
 
-FROM base AS test
-RUN make test-cicd
+FROM base AS ci
+RUN apk add --no-cache gcc musl-dev
 
-FROM gcr.io/distroless/static-debian12:nonroot AS runtime
+FROM gcr.io/distroless/static-debian13:nonroot AS runtime
 
-COPY --from=build /build/bin/ovh-ddns /ovh-ddns
+COPY --from=build /app/bin/ovh-ddns /ovh-ddns
 WORKDIR /data
 VOLUME ["/data"]
 

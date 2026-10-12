@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"net"
 
-	"github.com/Zouizoui78/ovh-ddns/internal/fetcher"
-	"github.com/Zouizoui78/ovh-ddns/internal/model"
-	"github.com/Zouizoui78/ovh-ddns/internal/ovh"
+	"github.com/alexzouiten/ovh-ddns/internal/fetcher"
+	"github.com/alexzouiten/ovh-ddns/internal/model"
+	"github.com/alexzouiten/ovh-ddns/internal/ovh"
 	"golang.org/x/sync/errgroup"
 )
 

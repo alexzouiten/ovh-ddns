@@ -3,7 +3,7 @@ package model
 import (
 	"testing"
 
-	"github.com/Zouizoui78/ovh-ddns/internal/utils"
+	"github.com/alexzouiten/ovh-ddns/internal/utils"
 )
 
 func TestRecordA(t *testing.T) {

@@ -1,4 +1,4 @@
-module github.com/Zouizoui78/ovh-ddns
+module github.com/alexzouiten/ovh-ddns
 
 go 1.26.3
 

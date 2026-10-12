@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/Zouizoui78/ovh-ddns/internal/ovh/dto"
+	"github.com/alexzouiten/ovh-ddns/internal/ovh/dto"
 )
 
 type fakeClient struct {

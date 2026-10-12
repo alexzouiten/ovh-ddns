@@ -7,7 +7,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/Zouizoui78/ovh-ddns/internal/model"
+	"github.com/alexzouiten/ovh-ddns/internal/model"
 	"golang.org/x/sync/errgroup"
 )
 

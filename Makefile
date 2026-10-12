@@ -1,9 +1,8 @@
-PROG=ovh-ddns
-OUT=bin/$(PROG)
-MAIN=cmd/main.go
-COVERAGE_FILE=test/coverage.out
-COVERAGE_HTML_FILE=test/coverage.html
-TEST_REPORT=test/test-report.json
+NAME=ovh-ddns
+MAIN=cmd/$(NAME)/$(NAME).go
+OUT=bin/$(NAME)
+COVERAGE_REPORT=test/coverage.out
+COVERAGE_REPORT_HTML=test/coverage.html
 
 .PHONY: all
 all: build
@@ -14,12 +13,13 @@ build:
 
 .PHONY: image
 image:
-	@docker build --target runtime -t zoui/$(PROG):latest .
+	@docker build --target runtime -t $(NAME):latest .
 
 .PHONY: compose-up
 compose-up:
 	@mkdir -p test/data
 	@docker compose -f test/compose.yaml up
+	@make compose-down
 
 .PHONY: compose-down
 compose-down:
@@ -32,17 +32,12 @@ run:
 .PHONY: test
 test:
 	@mkdir -p test
-	@go test -tags dev -cover -coverprofile=$(COVERAGE_FILE) ./...
+	@go test -tags dev -cover -coverprofile=$(COVERAGE_REPORT) ./...
 
 .PHONY: test-cicd
 test-cicd:
 	@mkdir -p test
-	@go test -tags dev -v -race -cover -coverprofile=$(COVERAGE_FILE) ./...
-
-.PHONY: test-race
-test-race:
-	@mkdir -p test
-	@go test -tags dev -race ./...
+	@CGO_ENABLED=1 go test -tags dev -v -race -cover -coverprofile=$(COVERAGE_REPORT) ./...
 
 .PHONY: benchmark
 benchmark:
@@ -50,11 +45,16 @@ benchmark:
 
 .PHONY: coverage
 coverage: test
-	@go tool cover -html=$(COVERAGE_FILE) -o=$(COVERAGE_HTML_FILE)
+	@go tool cover -html=$(COVERAGE_REPORT) -o=$(COVERAGE_REPORT_HTML)
+	@xdg-open $(COVERAGE_REPORT_HTML)
+
+.PHONY: lint
+lint:
+	@golangci-lint run
 
 .PHONY: clean
 clean:
-	@rm -rf bin
+	@rm -r bin
 
 .PHONY: gitclean
 gitclean:

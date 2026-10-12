@@ -8,10 +8,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Zouizoui78/ovh-ddns/internal/config"
-	"github.com/Zouizoui78/ovh-ddns/internal/fetcher"
-	"github.com/Zouizoui78/ovh-ddns/internal/ovh"
-	"github.com/Zouizoui78/ovh-ddns/internal/updater"
+	"github.com/alexzouiten/ovh-ddns/internal/config"
+	"github.com/alexzouiten/ovh-ddns/internal/fetcher"
+	"github.com/alexzouiten/ovh-ddns/internal/ovh"
+	"github.com/alexzouiten/ovh-ddns/internal/updater"
 )
 
 func main() {

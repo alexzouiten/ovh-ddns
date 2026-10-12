@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    tags-ignore:
+      - '**'
+  pull_request:
+  workflow_dispatch:
+
+# cancel ongoing pipeline when a new push happens
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  golangci:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+
+  test:
+    runs-on: ubuntu-latest
+    env:
+      TARGET: ci
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build test image
+        run: docker build --target ${{ env.TARGET }} --tag ${{ github.repository }}:${{ env.TARGET }} .
+
+      - name: Run tests
+        run: >-
+          docker run --rm
+          --volume "${{ github.workspace }}:/app"
+          --workdir /app
+          ${{ github.repository }}:${{ env.TARGET }}
+          make test-cicd
