@@ -2,65 +2,143 @@ package config
 
 import (
 	"errors"
+	"fmt"
+	"log/slog"
 	"os"
+	"time"
 
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+	"go.yaml.in/yaml/v3"
 )
 
 const (
-	CONFIG_PATH_ENV_VAR = "OVH_DDNS_CONFIG_PATH"
+	configPathEnvVar = "OVH_DDNS_CONFIG_PATH"
+)
 
-	DOMAINS_FLAG      = "domains"
-	APP_KEY_FLAG      = "app-key"
-	APP_SECRET_FLAG   = "app-secret"
-	CONSUMER_KEY_FLAG = "consumer-key"
+var (
+	// create a logger just to get the same formatting as the rest of the program
+	// when logging that we parse the yaml config in readConfigFile()
+	logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 )
 
 type Auth struct {
-	AppKey      string `mapstructure:"app_key"`
-	AppSecret   string `mapstructure:"app_secret"`
-	ConsumerKey string `mapstructure:"consumer_key"`
+	AppKey      string `yaml:"app_key"`
+	AppSecret   string `yaml:"app_secret"`
+	ConsumerKey string `yaml:"consumer_key"`
+}
+
+type Update struct {
+	Interval time.Duration `yaml:"interval"`
+	Timeout  time.Duration `yaml:"timeout"`
 }
 
 type Config struct {
-	Domains []string `mapstructure:"domains"`
-	Auth    Auth     `mapstructure:"auth"`
+	LogLevel slog.Level `yaml:"log_level"`
+	DryRun   bool       `yaml:"dry_run"`
+	Domains  []string   `yaml:"domains"`
+	Auth     Auth       `yaml:"auth"`
+	Update   Update     `yaml:"update"`
 }
 
-func configInit(cmd *cobra.Command) {
-	cmd.PersistentFlags().String(DOMAINS_FLAG, "", "Domains for which to set the IP addresses")
-	cmd.PersistentFlags().String(APP_KEY_FLAG, "", "OVH application key")
-	cmd.PersistentFlags().String(APP_SECRET_FLAG, "", "OVH application secret")
-	cmd.PersistentFlags().String(CONSUMER_KEY_FLAG, "", "OVH application consumer key")
-
-	viper.BindPFlag("domains", cmd.PersistentFlags().Lookup(DOMAINS_FLAG))
-	viper.BindPFlag("auth.app_key", cmd.PersistentFlags().Lookup(APP_KEY_FLAG))
-	viper.BindPFlag("auth.app_secret", cmd.PersistentFlags().Lookup(APP_SECRET_FLAG))
-	viper.BindPFlag("auth.consumer_key", cmd.PersistentFlags().Lookup(CONSUMER_KEY_FLAG))
+func newConfig() Config {
+	return Config{
+		LogLevel: slog.LevelInfo,
+		DryRun:   false,
+		Update: Update{
+			Interval: time.Minute * 5,
+			Timeout:  time.Second * 30,
+		},
+	}
 }
 
-func LoadConfig(cmd *cobra.Command) (*Config, error) {
-	configInit(cmd)
+func LoadConfig() (Config, error) {
+	cfg := newConfig()
 
-	viper.SetConfigName("config")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(os.Getenv(CONFIG_PATH_ENV_VAR))
-	viper.AddConfigPath(".")
+	if err := readConfigFile(&cfg, configPath()); err != nil {
+		return cfg, err
+	}
 
-	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := errors.AsType[viper.ConfigFileNotFoundError](err); !ok {
-			return nil, err
+	return cfg, nil
+}
+
+func configPath() string {
+	yamlPath := "./config.yaml"
+
+	if yamlPathEnvVar := os.Getenv(configPathEnvVar); yamlPathEnvVar != "" {
+		yamlPath = yamlPathEnvVar
+	}
+
+	return yamlPath
+}
+
+// readConfigFile parses the yaml config file and overwrite the default configuration with its content.
+// If the config file doesn't exist, then the default config is returned.
+func readConfigFile(cfg *Config, yamlPath string) error {
+	logger.Info("loading yaml configuration", "path", yamlPath)
+
+	f, err := os.Open(yamlPath)
+	if err != nil {
+		return err
+	}
+
+	// read at most 1MB
+	buf := make([]byte, 1_000_000)
+	n, err := f.Read(buf)
+	if err != nil {
+		return fmt.Errorf("failed to read config file '%s', %w", yamlPath, err)
+	}
+
+	if err := yaml.Unmarshal(buf[:n], &cfg); err != nil {
+		return fmt.Errorf("failed to parse yaml config: %w", err)
+	}
+
+	if errs := validate(cfg); len(errs) > 0 {
+		for _, err := range errs {
+			slog.Error("validation error", "error", err)
 		}
+		return errors.New("validation error")
 	}
 
-	viper.SetEnvPrefix("OVH_DDNS")
-	viper.AutomaticEnv()
+	return nil
+}
 
-	var config Config
-	if err := viper.Unmarshal(&config); err != nil {
-		return nil, err
+func validate(cfg *Config) []error {
+	var err []error
+
+	err = validateDomains(cfg.Domains, err)
+	err = validateAuth(cfg.Auth, err)
+	err = validateUpdate(cfg.Update, err)
+
+	return err
+}
+
+func validateDomains(domains []string, err []error) []error {
+	if len(domains) == 0 {
+		err = append(err, errors.New("need at least one configured domain"))
 	}
 
-	return &config, nil
+	return err
+}
+
+func validateAuth(auth Auth, err []error) []error {
+	if auth.AppKey == "" {
+		err = append(err, errors.New("app key cannot be empty"))
+	}
+
+	if auth.AppSecret == "" {
+		err = append(err, errors.New("app secret cannot be empty"))
+	}
+
+	if auth.ConsumerKey == "" {
+		err = append(err, errors.New("consumer key cannot be empty"))
+	}
+
+	return err
+}
+
+func validateUpdate(update Update, err []error) []error {
+	if update.Interval < time.Minute {
+		err = append(err, errors.New("update interval cannot be shorter than 1min"))
+	}
+
+	return err
 }
