@@ -70,13 +70,10 @@ func LoadConfig() (Config, error) {
 }
 
 func configPath() string {
-	yamlPath := defaultConfigPath
-
 	if yamlPathEnvVar := os.Getenv(configPathEnvVar); yamlPathEnvVar != "" {
-		yamlPath = yamlPathEnvVar
+		return yamlPathEnvVar
 	}
-
-	return yamlPath
+	return defaultConfigPath
 }
 
 // readConfigFile parses the yaml config file and overwrite the default configuration with its content.
