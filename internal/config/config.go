@@ -7,18 +7,30 @@ import (
 	"os"
 	"time"
 
+	"github.com/alexzouiten/ovh-ddns/internal/dns"
 	"go.yaml.in/yaml/v3"
 )
 
 const (
-	configPathEnvVar = "OVH_DDNS_CONFIG_PATH"
+	configPathEnvVar  = "OVH_DDNS_CONFIG_PATH"
+	defaultConfigPath = "./config.yaml"
 )
 
-var (
-	// create a logger just to get the same formatting as the rest of the program
-	// when logging that we parse the yaml config in readConfigFile()
-	logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
-)
+type Config struct {
+	LogLevel slog.Level    `yaml:"log_level"`
+	DryRun   bool          `yaml:"dry_run"`
+	Interval time.Duration `yaml:"interval"`
+	Timeout  time.Duration `yaml:"timeout"`
+	Records  []Record      `yaml:"records"`
+	Auth     Auth          `yaml:"auth"`
+}
+
+type Record struct {
+	Zone      string
+	Subdomain string
+	Types     []dns.RecordType
+	Ttl       int
+}
 
 type Auth struct {
 	AppKey      string `yaml:"app_key"`
@@ -26,42 +38,39 @@ type Auth struct {
 	ConsumerKey string `yaml:"consumer_key"`
 }
 
-type Update struct {
-	Interval time.Duration `yaml:"interval"`
-	Timeout  time.Duration `yaml:"timeout"`
-}
-
-type Config struct {
-	LogLevel slog.Level `yaml:"log_level"`
-	DryRun   bool       `yaml:"dry_run"`
-	Domains  []string   `yaml:"domains"`
-	Auth     Auth       `yaml:"auth"`
-	Update   Update     `yaml:"update"`
-}
-
 func newConfig() Config {
 	return Config{
 		LogLevel: slog.LevelInfo,
 		DryRun:   false,
-		Update: Update{
-			Interval: time.Minute * 5,
-			Timeout:  time.Second * 30,
-		},
+		Interval: time.Minute * 5,
+		Timeout:  time.Second * 30,
 	}
 }
 
 func LoadConfig() (Config, error) {
 	cfg := newConfig()
 
-	if err := readConfigFile(&cfg, configPath()); err != nil {
+	yml, err := readConfigFile(configPath())
+	if err != nil {
 		return cfg, err
+	}
+
+	if err := parseYaml(&cfg, yml); err != nil {
+		return cfg, err
+	}
+
+	if errs := validate(&cfg); len(errs) > 0 {
+		for _, err := range errs {
+			slog.Error("validation error", "error", err)
+		}
+		return cfg, errors.New("validation error")
 	}
 
 	return cfg, nil
 }
 
 func configPath() string {
-	yamlPath := "./config.yaml"
+	yamlPath := defaultConfigPath
 
 	if yamlPathEnvVar := os.Getenv(configPathEnvVar); yamlPathEnvVar != "" {
 		yamlPath = yamlPathEnvVar
@@ -72,47 +81,40 @@ func configPath() string {
 
 // readConfigFile parses the yaml config file and overwrite the default configuration with its content.
 // If the config file doesn't exist, then the default config is returned.
-func readConfigFile(cfg *Config, yamlPath string) error {
-	logger.Info("loading yaml configuration", "path", yamlPath)
-
+func readConfigFile(yamlPath string) ([]byte, error) {
 	f, err := os.Open(yamlPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// read at most 1MB
 	buf := make([]byte, 1_000_000)
 	n, err := f.Read(buf)
 	if err != nil {
-		return fmt.Errorf("failed to read config file '%s', %w", yamlPath, err)
+		return nil, fmt.Errorf("failed to read config file '%s', %w", yamlPath, err)
 	}
+	return buf[:n], nil
+}
 
-	if err := yaml.Unmarshal(buf[:n], &cfg); err != nil {
+func parseYaml(cfg *Config, buf []byte) error {
+	if err := yaml.Unmarshal(buf, cfg); err != nil {
 		return fmt.Errorf("failed to parse yaml config: %w", err)
 	}
-
-	if errs := validate(cfg); len(errs) > 0 {
-		for _, err := range errs {
-			slog.Error("validation error", "error", err)
-		}
-		return errors.New("validation error")
-	}
-
 	return nil
 }
 
 func validate(cfg *Config) []error {
 	var err []error
 
-	err = validateDomains(cfg.Domains, err)
+	err = validateInterval(cfg.Interval, err)
 	err = validateAuth(cfg.Auth, err)
-	err = validateUpdate(cfg.Update, err)
+	err = validateRecords(cfg.Records, err)
 
 	return err
 }
 
-func validateDomains(domains []string, err []error) []error {
-	if len(domains) == 0 {
+func validateRecords(records []Record, err []error) []error {
+	if len(records) == 0 {
 		err = append(err, errors.New("need at least one configured domain"))
 	}
 
@@ -135,8 +137,8 @@ func validateAuth(auth Auth, err []error) []error {
 	return err
 }
 
-func validateUpdate(update Update, err []error) []error {
-	if update.Interval < time.Minute {
+func validateInterval(interval time.Duration, err []error) []error {
+	if interval < time.Minute {
 		err = append(err, errors.New("update interval cannot be shorter than 1min"))
 	}
 
