@@ -112,7 +112,7 @@ func validate(cfg *Config) []error {
 
 func validateRecords(records []Record, err []error) []error {
 	if len(records) == 0 {
-		err = append(err, errors.New("need at least one configured domain"))
+		err = append(err, errors.New("need at least one configured record"))
 	}
 
 	return err
