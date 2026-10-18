@@ -13,9 +13,14 @@ import (
 
 const PROVIDER = "https://ifconfig.me/ip"
 
+type client struct {
+	http.Client
+	transport string
+}
+
 type Fetcher struct {
-	v4Client *http.Client
-	v6Client *http.Client
+	v4Client *client
+	v6Client *client
 }
 
 func New() *Fetcher {
@@ -26,67 +31,56 @@ func New() *Fetcher {
 }
 
 func (i *Fetcher) FetchIps(parentCtx context.Context) (model.Ips, error) {
+	var ips model.Ips
+
 	eg, ctx := errgroup.WithContext(parentCtx)
-	var ipv4, ipv6 net.IP
-
-	eg.Go(func() error {
-		var err error
-		ipv4, err = fetchIp(ctx, i.v4Client)
-		if err != nil {
-			return fmt.Errorf("failed to get ipv4 address: %w", err)
-		}
-		return nil
-	})
-
-	eg.Go(func() error {
-		var err error
-		ipv6, err = fetchIp(ctx, i.v6Client)
-		if err != nil {
-			return fmt.Errorf("failed to get ipv6 address: %w", err)
-		}
-		return nil
-	})
-
+	eg.Go(func() error { return fetchIp(&ips.V4, ctx, i.v4Client) })
+	eg.Go(func() error { return fetchIp(&ips.V6, ctx, i.v6Client) })
 	if err := eg.Wait(); err != nil {
 		return model.Ips{}, err
 	}
 
-	return model.Ips{
-		V4: ipv4,
-		V6: ipv6,
-	}, nil
+	return ips, nil
 }
 
-func newTransportSpecificClient(transport string) *http.Client {
+func newTransportSpecificClient(transport string) *client {
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.DialContext = func(ctx context.Context, network string, addr string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, transport, addr)
 	}
-	client := *http.DefaultClient
-	client.Transport = t
-	return &client
+	c := *http.DefaultClient
+	c.Transport = t
+	return &client{
+		Client:    c,
+		transport: transport,
+	}
 }
 
-func fetchIp(ctx context.Context, c *http.Client) (net.IP, error) {
+func fetchIp(ip *net.IP, ctx context.Context, c *client) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", PROVIDER, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("ip fetch(%s): failed to create request: %w", c.transport, err)
 	}
 
 	res, err := c.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get ip: %w", err)
+		return fmt.Errorf("ip fetch(%s): failed to get ip: %w", c.transport, err)
 	}
 	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read body: %w", err)
+		return fmt.Errorf("ip fetch(%s): failed to read body: %w", c.transport, err)
 	}
 
 	if res.StatusCode != 200 {
-		return nil, fmt.Errorf("ip fetch: got status code %d. body: '%s'", res.StatusCode, body)
+		return fmt.Errorf("ip fetch(%s): got status code %d. body: '%s'", c.transport, res.StatusCode, body)
 	}
 
-	return net.ParseIP(string(body)), nil
+	*ip = net.ParseIP(string(body))
+	if *ip == nil {
+		return fmt.Errorf("ip fetch(%s): '%s' is not a valid IP", c.transport, *ip)
+	}
+
+	return nil
 }
