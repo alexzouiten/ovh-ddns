@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"time"
 
@@ -17,12 +18,13 @@ const (
 )
 
 type Config struct {
-	LogLevel slog.Level    `yaml:"log_level"`
-	DryRun   bool          `yaml:"dry_run"`
-	Interval time.Duration `yaml:"interval"`
-	Timeout  time.Duration `yaml:"timeout"`
-	Records  []Record      `yaml:"records"`
-	Auth     Auth          `yaml:"auth"`
+	LogLevel   slog.Level    `yaml:"log_level"`
+	DryRun     bool          `yaml:"dry_run"`
+	Interval   time.Duration `yaml:"interval"`
+	Timeout    time.Duration `yaml:"timeout"`
+	IpProvider string        `yaml:"ip_provider"`
+	Records    []Record      `yaml:"records"`
+	Auth       Auth          `yaml:"auth"`
 }
 
 type Record struct {
@@ -106,6 +108,7 @@ func validate(cfg *Config) []error {
 	err = validateInterval(cfg.Interval, err)
 	err = validateAuth(cfg.Auth, err)
 	err = validateRecords(cfg.Records, err)
+	err = validateIpProvider(cfg.IpProvider, err)
 
 	return err
 }
@@ -140,4 +143,17 @@ func validateInterval(interval time.Duration, err []error) []error {
 	}
 
 	return err
+}
+
+func validateIpProvider(ipProvider string, errs []error) []error {
+	if ipProvider == "" {
+		errs = append(errs, errors.New("IP provider URL cannot be empty"))
+		return errs
+	}
+
+	if _, err := url.ParseRequestURI(ipProvider); err != nil {
+		errs = append(errs, fmt.Errorf("'%s' is not a valid URL", ipProvider))
+	}
+
+	return errs
 }

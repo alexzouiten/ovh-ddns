@@ -36,3 +36,27 @@ func TestConfigPath_ValueFromEnv(t *testing.T) {
 		os.Setenv(configPathEnvVar, oldConfigPathEnvVar)
 	}
 }
+
+func TestValidateIpProvider_Success(t *testing.T) {
+	var actual []error
+	actual = validateIpProvider("https://validwebsite.com", actual)
+	if len(actual) != 0 {
+		t.Errorf("expected no error, got %v", actual)
+	}
+}
+
+func TestValidateIpProvider_Empty(t *testing.T) {
+	var actual []error
+	actual = validateIpProvider("", actual)
+	if len(actual) != 1 {
+		t.Errorf("expected 1 error, got %d: %v", len(actual), actual)
+	}
+}
+
+func TestValidateIpProvider_InvalidUrl(t *testing.T) {
+	var actual []error
+	actual = validateIpProvider("randomtld", actual)
+	if len(actual) != 1 {
+		t.Errorf("expected 1 error, got %d: %v", len(actual), actual)
+	}
+}
