@@ -88,6 +88,18 @@ auth:
 		t.Errorf("expected IP provider URL '%s', got '%s'", expected.IpProvider, actual.IpProvider)
 	}
 
+	if actual.Auth.AppKey != expected.Auth.AppKey {
+		t.Errorf("expected app key '%s', got '%s'", expected.Auth.AppKey, actual.Auth.AppKey)
+	}
+
+	if actual.Auth.AppSecret != expected.Auth.AppSecret {
+		t.Errorf("expected app secret '%s', got '%s'", expected.Auth.AppSecret, actual.Auth.AppSecret)
+	}
+
+	if actual.Auth.ConsumerKey != expected.Auth.ConsumerKey {
+		t.Errorf("expected consumer key '%s', got '%s'", expected.Auth.ConsumerKey, actual.Auth.ConsumerKey)
+	}
+
 	expectedRecord := expected.Records[0]
 	actualRecord := actual.Records[0]
 
