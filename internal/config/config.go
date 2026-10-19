@@ -103,46 +103,46 @@ func parseYaml(cfg *Config, buf []byte) error {
 }
 
 func validate(cfg *Config) []error {
-	var err []error
+	var errs []error
 
-	err = validateInterval(cfg.Interval, err)
-	err = validateAuth(cfg.Auth, err)
-	err = validateRecords(cfg.Records, err)
-	err = validateIpProvider(cfg.IpProvider, err)
+	errs = validateInterval(cfg.Interval, errs)
+	errs = validateAuth(cfg.Auth, errs)
+	errs = validateRecords(cfg.Records, errs)
+	errs = validateIpProvider(cfg.IpProvider, errs)
 
-	return err
+	return errs
 }
 
-func validateRecords(records []Record, err []error) []error {
+func validateRecords(records []Record, errs []error) []error {
 	if len(records) == 0 {
-		err = append(err, errors.New("need at least one configured record"))
+		errs = append(errs, errors.New("need at least one configured record"))
 	}
 
-	return err
+	return errs
 }
 
-func validateAuth(auth Auth, err []error) []error {
+func validateAuth(auth Auth, errs []error) []error {
 	if auth.AppKey == "" {
-		err = append(err, errors.New("app key cannot be empty"))
+		errs = append(errs, errors.New("app key cannot be empty"))
 	}
 
 	if auth.AppSecret == "" {
-		err = append(err, errors.New("app secret cannot be empty"))
+		errs = append(errs, errors.New("app secret cannot be empty"))
 	}
 
 	if auth.ConsumerKey == "" {
-		err = append(err, errors.New("consumer key cannot be empty"))
+		errs = append(errs, errors.New("consumer key cannot be empty"))
 	}
 
-	return err
+	return errs
 }
 
-func validateInterval(interval time.Duration, err []error) []error {
+func validateInterval(interval time.Duration, errs []error) []error {
 	if interval < time.Minute {
-		err = append(err, errors.New("update interval cannot be shorter than 1min"))
+		errs = append(errs, errors.New("update interval cannot be shorter than 1min"))
 	}
 
-	return err
+	return errs
 }
 
 func validateIpProvider(ipProvider string, errs []error) []error {
