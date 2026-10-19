@@ -32,7 +32,7 @@ func main() {
 		slog.Info("dry run mode active")
 	}
 
-	fetcher := fetcher.New()
+	fetcher := fetcher.NewFetcher()
 	ovh, err := ovh.New(cfg.Auth, cfg.DryRun)
 	if err != nil {
 		slog.Error("failed to create ovh client", "err", err)

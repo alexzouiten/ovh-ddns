@@ -19,14 +19,16 @@ type client struct {
 }
 
 type Fetcher struct {
-	v4Client *client
-	v6Client *client
+	providerUrl string
+	v4Client    *client
+	v6Client    *client
 }
 
-func New() *Fetcher {
+func NewFetcher(providerUrl string) *Fetcher {
 	return &Fetcher{
-		v4Client: newTransportSpecificClient("tcp4"),
-		v6Client: newTransportSpecificClient("tcp6"),
+		providerUrl: providerUrl,
+		v4Client:    newTransportSpecificClient("tcp4"),
+		v6Client:    newTransportSpecificClient("tcp6"),
 	}
 }
 
