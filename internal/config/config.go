@@ -65,7 +65,7 @@ func LoadConfig() (Config, error) {
 		for _, err := range errs {
 			slog.Error("validation error", "error", err)
 		}
-		return cfg, errors.New("validation error")
+		return cfg, errors.New("config validation error")
 	}
 
 	return cfg, nil
