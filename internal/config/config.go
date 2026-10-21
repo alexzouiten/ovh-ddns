@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/alexzouiten/ovh-ddns/internal/dns"
+	"github.com/alexzouiten/ovh-ddns/internal/model"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -30,7 +30,7 @@ type Config struct {
 type Record struct {
 	Zone      string
 	Subdomain string
-	Types     []dns.RecordType
+	Types     []model.RecordType
 	Ttl       int
 }
 

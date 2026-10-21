@@ -1,4 +1,4 @@
-package dns
+package model
 
 import (
 	"testing"
@@ -27,7 +27,9 @@ func TestUnknownRecordString(t *testing.T) {
 
 func TestAParse(t *testing.T) {
 	var rt RecordType
-	if err := rt.parse("A"); err != nil {
+	var err error
+
+	if rt, err = RecordTypeFromString("A"); err != nil {
 		t.Errorf("expected no error, got %s", err)
 	}
 
@@ -38,7 +40,9 @@ func TestAParse(t *testing.T) {
 
 func TestAAAAParse(t *testing.T) {
 	var rt RecordType
-	if err := rt.parse("AAAA"); err != nil {
+	var err error
+
+	if rt, err = RecordTypeFromString("AAAA"); err != nil {
 		t.Errorf("expected no error, got %s", err)
 	}
 
@@ -48,8 +52,7 @@ func TestAAAAParse(t *testing.T) {
 }
 
 func TestUnknownRecordParse(t *testing.T) {
-	var rt RecordType
-	if err := rt.parse("test"); err == nil {
+	if _, err := RecordTypeFromString("test"); err == nil {
 		t.Errorf("expected error, got none")
 	}
 }

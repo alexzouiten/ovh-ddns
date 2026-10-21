@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alexzouiten/ovh-ddns/internal/dns"
+	"github.com/alexzouiten/ovh-ddns/internal/model"
 )
 
 func TestLoadConfig(t *testing.T) {
@@ -52,7 +52,7 @@ auth:
 			{
 				Zone:      "mydomain.com",
 				Subdomain: "sub",
-				Types:     []dns.RecordType{dns.RecordA, dns.RecordAAAA},
+				Types:     []model.RecordType{model.RecordA, model.RecordAAAA},
 				Ttl:       4,
 			},
 		},

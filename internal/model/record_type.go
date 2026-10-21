@@ -1,4 +1,4 @@
-package dns
+package model
 
 import (
 	"fmt"
@@ -12,6 +12,17 @@ const (
 	RecordA RecordType = iota
 	RecordAAAA
 )
+
+func RecordTypeFromString(s string) (RecordType, error) {
+	switch strings.ToUpper(s) {
+	case "A":
+		return RecordA, nil
+	case "AAAA":
+		return RecordAAAA, nil
+	default:
+		return 0, fmt.Errorf("unknown record type '%s'", s)
+	}
+}
 
 func (t RecordType) String() string {
 	switch t {
@@ -29,7 +40,9 @@ func (t RecordType) MarshalText() ([]byte, error) {
 }
 
 func (t *RecordType) UnmarshalText(data []byte) error {
-	return t.parse(string(data))
+	parsed, err := RecordTypeFromString(string(data))
+	*t = parsed
+	return err
 }
 
 func (t RecordType) MarshalJSON() ([]byte, error) {
@@ -41,17 +54,8 @@ func (t *RecordType) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	return t.parse(s)
-}
 
-func (t *RecordType) parse(s string) error {
-	switch strings.ToUpper(s) {
-	case "A":
-		*t = RecordA
-	case "AAAA":
-		*t = RecordAAAA
-	default:
-		return fmt.Errorf("unknown record type '%s'", s)
-	}
-	return nil
+	parsed, err := RecordTypeFromString(s)
+	*t = parsed
+	return err
 }
