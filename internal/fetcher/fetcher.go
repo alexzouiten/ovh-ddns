@@ -11,8 +11,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const PROVIDER = "https://ifconfig.me/ip"
-
 type client struct {
 	http.Client
 	transport string
@@ -24,20 +22,19 @@ type Fetcher struct {
 	v6Client    *client
 }
 
-func NewFetcher(providerUrl string) *Fetcher {
+func NewFetcher() *Fetcher {
 	return &Fetcher{
-		providerUrl: providerUrl,
-		v4Client:    newTransportSpecificClient("tcp4"),
-		v6Client:    newTransportSpecificClient("tcp6"),
+		v4Client: newTransportSpecificClient("tcp4"),
+		v6Client: newTransportSpecificClient("tcp6"),
 	}
 }
 
-func (i *Fetcher) FetchIps(parentCtx context.Context) (model.Ips, error) {
+func (i *Fetcher) FetchIps(parentCtx context.Context, providerUrl string) (model.Ips, error) {
 	var ips model.Ips
 
 	eg, ctx := errgroup.WithContext(parentCtx)
-	eg.Go(func() error { return fetchIp(&ips.V4, ctx, i.v4Client) })
-	eg.Go(func() error { return fetchIp(&ips.V6, ctx, i.v6Client) })
+	eg.Go(func() error { return i.v4Client.fetchIp(&ips.V4, ctx, providerUrl) })
+	eg.Go(func() error { return i.v6Client.fetchIp(&ips.V6, ctx, providerUrl) })
 	if err := eg.Wait(); err != nil {
 		return model.Ips{}, err
 	}
@@ -58,8 +55,8 @@ func newTransportSpecificClient(transport string) *client {
 	}
 }
 
-func fetchIp(ip *net.IP, ctx context.Context, c *client) error {
-	req, err := http.NewRequestWithContext(ctx, "GET", PROVIDER, nil)
+func (c *client) fetchIp(ip *net.IP, ctx context.Context, providerUrl string) error {
+	req, err := http.NewRequestWithContext(ctx, "GET", providerUrl, nil)
 	if err != nil {
 		return fmt.Errorf("ip fetch(%s): failed to create request: %w", c.transport, err)
 	}
