@@ -7,15 +7,15 @@ import (
 )
 
 type RecordPost struct {
-	FieldType string `json:"fieldType"`
-	SubDomain string `json:"subDomain,omitempty"`
-	Target    net.IP `json:"target"`
-	Ttl       int    `json:"ttl,omitempty"`
+	FieldType model.RecordType `json:"fieldType"`
+	SubDomain string           `json:"subDomain,omitempty"`
+	Target    net.IP           `json:"target"`
+	Ttl       int              `json:"ttl,omitempty"`
 }
 
 func NewRecordPostDtoFromModel(r model.Record) RecordPost {
 	return RecordPost{
-		FieldType: r.RecordType.String(),
+		FieldType: r.RecordType,
 		SubDomain: r.SubDomain, // optional
 		Target:    r.Target,
 		Ttl:       r.Ttl, // optional

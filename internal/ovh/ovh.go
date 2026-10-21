@@ -107,7 +107,7 @@ func (ovh *Ovh) PostRecord(ctx context.Context, r model.Record) (model.Record, e
 func (ovh *Ovh) PostARecord(ctx context.Context, zoneName string, target net.IP) (model.Record, error) {
 	return ovh.PostRecord(ctx, model.Record{
 		Zone:       zoneName,
-		RecordType: model.RecordTypeA,
+		RecordType: model.RecordA,
 		Target:     target,
 	})
 }
@@ -115,7 +115,7 @@ func (ovh *Ovh) PostARecord(ctx context.Context, zoneName string, target net.IP)
 func (ovh *Ovh) PostAAAARecord(ctx context.Context, zoneName string, target net.IP) (model.Record, error) {
 	return ovh.PostRecord(ctx, model.Record{
 		Zone:       zoneName,
-		RecordType: model.RecordTypeAAAA,
+		RecordType: model.RecordAAAA,
 		Target:     target,
 	})
 }

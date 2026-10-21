@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/alexzouiten/ovh-ddns/internal/model"
 	"github.com/alexzouiten/ovh-ddns/internal/ovh/dto"
 )
 
@@ -171,13 +172,13 @@ func TestPostRecord(t *testing.T) {
 func newARecordDto(target string) dto.Record {
 	return dto.Record{
 		Target:    net.ParseIP(target),
-		FieldType: "A",
+		FieldType: model.RecordA,
 	}
 }
 
 func newAAAARecordDto(target string) dto.Record {
 	return dto.Record{
 		Target:    net.ParseIP(target),
-		FieldType: "AAAA",
+		FieldType: model.RecordAAAA,
 	}
 }
