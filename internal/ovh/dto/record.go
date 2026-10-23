@@ -17,11 +17,11 @@ type Record struct {
 
 func (r Record) ToModel() model.Record {
 	return model.Record{
-		Id:         r.Id,
-		RecordType: r.FieldType,
-		SubDomain:  r.SubDomain,
-		Target:     r.Target,
-		Ttl:        r.Ttl,
-		Zone:       r.Zone,
+		Id:        r.Id,
+		Type:      r.FieldType,
+		SubDomain: r.SubDomain,
+		Target:    r.Target,
+		Ttl:       r.Ttl,
+		Zone:      r.Zone,
 	}
 }

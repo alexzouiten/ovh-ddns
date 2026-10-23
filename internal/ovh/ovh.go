@@ -82,7 +82,7 @@ func (ovh *Ovh) PostRecord(ctx context.Context, r model.Record) (model.Record, e
 		slog.Warn(
 			"dry run: skipping post",
 			"zone", r.Zone,
-			"recordType", r.RecordType,
+			"recordType", r.Type,
 			"target", r.Target,
 			"dto", json,
 		)
@@ -106,17 +106,17 @@ func (ovh *Ovh) PostRecord(ctx context.Context, r model.Record) (model.Record, e
 
 func (ovh *Ovh) PostARecord(ctx context.Context, zoneName string, target net.IP) (model.Record, error) {
 	return ovh.PostRecord(ctx, model.Record{
-		Zone:       zoneName,
-		RecordType: model.RecordA,
-		Target:     target,
+		Zone:   zoneName,
+		Type:   model.RecordA,
+		Target: target,
 	})
 }
 
 func (ovh *Ovh) PostAAAARecord(ctx context.Context, zoneName string, target net.IP) (model.Record, error) {
 	return ovh.PostRecord(ctx, model.Record{
-		Zone:       zoneName,
-		RecordType: model.RecordAAAA,
-		Target:     target,
+		Zone:   zoneName,
+		Type:   model.RecordAAAA,
+		Target: target,
 	})
 }
 
@@ -129,7 +129,7 @@ func (ovh *Ovh) PutRecord(ctx context.Context, r model.Record) error {
 		slog.Warn(
 			"dry run: skipping put",
 			"zone", r.Zone,
-			"recordType", r.RecordType,
+			"recordType", r.Type,
 			"target", r.Target,
 			"dto", json,
 		)
