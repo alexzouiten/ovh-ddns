@@ -56,3 +56,16 @@ func TestZoneStringer_NilIpv6(t *testing.T) {
 		t.Errorf("expected string '%s', got '%s'", expected, actual)
 	}
 }
+
+func TestZoneStringer_BothNil(t *testing.T) {
+	zone := Zone{
+		A:    nil,
+		AAAA: nil,
+	}
+
+	expected := "{A: nil, AAAA: nil}"
+	actual := zone.String()
+	if actual != expected {
+		t.Errorf("expected string '%s', got '%s'", expected, actual)
+	}
+}
