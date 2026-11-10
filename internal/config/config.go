@@ -54,11 +54,11 @@ func LoadConfig() (Config, error) {
 
 	yml, err := readConfigFile(configPath())
 	if err != nil {
-		return cfg, err
+		return cfg, fmt.Errorf("failed to read config file '%s': %w", configPath(), err)
 	}
 
-	if err := parseYaml(&cfg, yml); err != nil {
-		return cfg, err
+	if err := yaml.Unmarshal(yml, &cfg); err != nil {
+		return cfg, fmt.Errorf("failed to parse yaml config: %w", err)
 	}
 
 	if errs := validate(&cfg); len(errs) > 0 {
@@ -88,16 +88,9 @@ func readConfigFile(yamlPath string) ([]byte, error) {
 	buf := make([]byte, 1_000_000)
 	n, err := f.Read(buf)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config file '%s', %w", yamlPath, err)
+		return nil, err
 	}
 	return buf[:n], nil
-}
-
-func parseYaml(cfg *Config, buf []byte) error {
-	if err := yaml.Unmarshal(buf, cfg); err != nil {
-		return fmt.Errorf("failed to parse yaml config: %w", err)
-	}
-	return nil
 }
 
 func validate(cfg *Config) []error {
@@ -113,7 +106,42 @@ func validate(cfg *Config) []error {
 
 func validateRecords(records []Record, errs []error) []error {
 	if len(records) == 0 {
-		errs = append(errs, errors.New("need at least one configured record"))
+		errs = append(errs, ErrNoRecord)
+	}
+
+	for _, record := range records {
+		errs = validateRecord(record, errs)
+	}
+
+	return errs
+}
+
+func validateRecord(record Record, errs []error) []error {
+	if record.Ttl < 0 {
+		errs = append(errs, ErrTtlNegative)
+	}
+
+	errs = validateRecordTypes(record.Types, errs)
+
+	return errs
+}
+
+func validateRecordTypes(recordTypes []model.RecordType, errs []error) []error {
+	aCount, aaaaCount := 0, 0
+
+	for _, rt := range recordTypes {
+		switch rt {
+		case model.RecordA:
+			aCount++
+		case model.RecordAAAA:
+			aaaaCount++
+		default:
+			panic("unexpected record type")
+		}
+	}
+
+	if aCount > 1 || aaaaCount > 1 {
+		errs = append(errs, ErrRecordTypeDuplicated)
 	}
 
 	return errs
@@ -121,15 +149,15 @@ func validateRecords(records []Record, errs []error) []error {
 
 func validateAuth(auth Auth, errs []error) []error {
 	if auth.AppKey == "" {
-		errs = append(errs, errors.New("app key cannot be empty"))
+		errs = append(errs, ErrAppKeyEmpty)
 	}
 
 	if auth.AppSecret == "" {
-		errs = append(errs, errors.New("app secret cannot be empty"))
+		errs = append(errs, ErrAppSecretEmpty)
 	}
 
 	if auth.ConsumerKey == "" {
-		errs = append(errs, errors.New("consumer key cannot be empty"))
+		errs = append(errs, ErrConsumerKeyEmpty)
 	}
 
 	return errs
@@ -137,7 +165,7 @@ func validateAuth(auth Auth, errs []error) []error {
 
 func validateInterval(interval time.Duration, errs []error) []error {
 	if interval < time.Minute {
-		errs = append(errs, errors.New("update interval cannot be shorter than 1min"))
+		errs = append(errs, ErrUpdateIntervalTooShort)
 	}
 
 	return errs
@@ -145,7 +173,7 @@ func validateInterval(interval time.Duration, errs []error) []error {
 
 func validateIpProvider(ipProvider string, errs []error) []error {
 	if ipProvider == "" {
-		errs = append(errs, errors.New("IP provider URL cannot be empty"))
+		errs = append(errs, ErrIpProviderUrlEmpty)
 		return errs
 	}
 

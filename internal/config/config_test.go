@@ -175,3 +175,45 @@ func TestValidateIpProvider_InvalidUrl(t *testing.T) {
 		t.Errorf("expected 1 error, got %d: %v", len(actual), actual)
 	}
 }
+
+func TestValidateRecordTypes_TooManyA(t *testing.T) {
+	var actual []error
+	actual = validateRecordTypes([]model.RecordType{model.RecordA, model.RecordA}, actual)
+	if len(actual) != 1 {
+		t.Errorf("expected 1 error, got %d: %v", len(actual), actual)
+	}
+}
+
+func TestValidateRecordTypes_TooManyAAAA(t *testing.T) {
+	var actual []error
+	actual = validateRecordTypes([]model.RecordType{model.RecordAAAA, model.RecordAAAA}, actual)
+	if len(actual) != 1 {
+		t.Errorf("expected 1 error, got %d: %v", len(actual), actual)
+	}
+}
+
+func TestValidateRecord_InvalidTtl(t *testing.T) {
+	var actual []error
+
+	r := Record{
+		Ttl: -1,
+	}
+	actual = validateRecord(r, actual)
+
+	if len(actual) != 1 {
+		t.Errorf("expected 1 error, got %d: %v", len(actual), actual)
+	}
+}
+
+func TestValidateRecord_DuplicatedRecordTypes(t *testing.T) {
+	var actual []error
+
+	r := Record{
+		Types: []model.RecordType{model.RecordA, model.RecordA},
+	}
+	actual = validateRecord(r, actual)
+
+	if len(actual) != 1 {
+		t.Errorf("expected 1 error, got %d: %v", len(actual), actual)
+	}
+}
