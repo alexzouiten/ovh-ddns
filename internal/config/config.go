@@ -78,8 +78,6 @@ func configPath() string {
 	return defaultConfigPath
 }
 
-// readConfigFile parses the yaml config file and overwrite the default configuration with its content.
-// If the config file doesn't exist, then the default config is returned.
 func readConfigFile(yamlPath string) ([]byte, error) {
 	f, err := os.Open(yamlPath)
 	if err != nil {
