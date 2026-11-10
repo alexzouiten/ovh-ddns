@@ -41,7 +41,7 @@ func TestFetchIp_InvalidIp(t *testing.T) {
 
 	err := client.fetchIp(&actual, t.Context(), testServer.URL)
 	if err == nil {
-		t.Fatalf("expected error for invalid IP, got non")
+		t.Fatalf("expected error for invalid IP, got none")
 	}
 }
 
@@ -57,6 +57,6 @@ func TestFetchIp_HttpErrorStatus(t *testing.T) {
 
 	err := client.fetchIp(&actual, t.Context(), testServer.URL)
 	if err == nil {
-		t.Fatalf("expected error for non-200 http response, got non")
+		t.Fatalf("expected error for non-200 http response, got none")
 	}
 }
