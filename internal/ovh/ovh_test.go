@@ -1,173 +1,329 @@
 package ovh
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
+	"io"
 	"net"
-	"path"
-	"strconv"
+	"net/http"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/alexzouiten/ovh-ddns/internal/model"
 	"github.com/alexzouiten/ovh-ddns/internal/ovh/dto"
+	ovhapi "github.com/ovh/go-ovh/ovh"
 )
 
-type fakeClient struct {
-	responses map[string]any
+// ---------------------------------------------------------------------------
+// Test infrastructure: fake the HTTP layer of *ovhapi.Client
+// ---------------------------------------------------------------------------
+
+type recordedRequest struct {
+	Method string
+	Path   string // path + query, without the "/1.0" version prefix
+	Body   []byte
 }
 
-func (f *fakeClient) GetWithContext(_ context.Context, url string, resType any) error {
-	value, ok := f.responses[url]
-	if !ok {
-		return fmt.Errorf("unexpected url: %s", url)
+type fakeTransport struct {
+	mu       sync.Mutex
+	requests []recordedRequest
+	handler  func(r recordedRequest) (status int, body any)
+}
+
+func (f *fakeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	var body []byte
+	if req.Body != nil {
+		body, _ = io.ReadAll(req.Body)
+	}
+	rec := recordedRequest{
+		Method: req.Method,
+		// The endpoint is https://eu.api.ovh.com/1.0, so strip the version prefix.
+		Path: strings.TrimPrefix(req.URL.RequestURI(), "/1.0"),
+		Body: body,
 	}
 
-	if err, ok := value.(error); ok {
-		return err
+	// The client calls GET /auth/time before its first authenticated request.
+	if rec.Method == http.MethodGet && rec.Path == "/auth/time" {
+		return jsonResponse(http.StatusOK, time.Now().Unix()), nil
 	}
 
-	payload, err := json.Marshal(value)
+	f.mu.Lock()
+	f.requests = append(f.requests, rec)
+	f.mu.Unlock()
+
+	status, resp := f.handler(rec)
+	return jsonResponse(status, resp), nil
+}
+
+func jsonResponse(status int, body any) *http.Response {
+	var b []byte
+	if body != nil {
+		b, _ = json.Marshal(body)
+	}
+	return &http.Response{
+		StatusCode: status,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(bytes.NewReader(b)),
+	}
+}
+
+func newTestOvh(t *testing.T, dryRun bool, h func(recordedRequest) (int, any)) (*Ovh, *fakeTransport) {
+	t.Helper()
+
+	c, err := ovhapi.NewClient("ovh-eu", "key", "secret", "consumer")
 	if err != nil {
-		return err
+		t.Fatal(err)
 	}
 
-	return json.Unmarshal(payload, resType)
+	ft := &fakeTransport{handler: h}
+	c.Client = &http.Client{Transport: ft}
+
+	return NewFromClient(c, dryRun), ft
 }
 
-func (f *fakeClient) PostWithContext(ctx context.Context, url string, reqBody, resType any) error {
-	if _, ok := f.responses[url]; ok {
-		return fmt.Errorf("record already present")
+// routes builds a handler that answers from a static "METHOD /path?query" map
+// and returns 404 for anything unexpected.
+func routes(m map[string]any) func(recordedRequest) (int, any) {
+	return func(r recordedRequest) (int, any) {
+		key := r.Method + " " + r.Path
+		if v, ok := m[key]; ok {
+			return http.StatusOK, v
+		}
+		return http.StatusNotFound, map[string]string{"message": "unexpected request: " + key}
 	}
-
-	d := reqBody.(dto.RecordPost)
-	res, ok := resType.(*dto.Record)
-	if !ok {
-		panic("expected resType to be a *dto.Record")
-	}
-
-	*res = dto.Record{
-		Id:        len(f.responses),
-		FieldType: d.FieldType,
-		SubDomain: d.SubDomain,
-		Target:    d.Target,
-		Ttl:       d.Ttl,
-	}
-	f.responses[path.Join(url, strconv.FormatInt(int64(res.Id), 10))] = res
-	return nil
 }
 
-func (f *fakeClient) PutWithContext(ctx context.Context, url string, reqBody, resType any) error {
-	value, ok := f.responses[url]
-	if !ok {
-		return fmt.Errorf("record not found")
-	}
+// ---------------------------------------------------------------------------
+// GetRecord
+// ---------------------------------------------------------------------------
 
-	oldValue, ok := value.(dto.Record)
-	if !ok {
-		return fmt.Errorf("expected Record dto")
-	}
+func TestGetRecord(t *testing.T) {
+	ovh, _ := newTestOvh(t, false, routes(map[string]any{
+		"GET /domain/zone/example.com/record?fieldType=A&subDomain=":    []int{1},
+		"GET /domain/zone/example.com/record/1":                         newARecordDto("1.2.3.4"),
+		"GET /domain/zone/example.com/record?fieldType=AAAA&subDomain=": []int{2},
+		"GET /domain/zone/example.com/record/2":                         newAAAARecordDto("2001:db8::1"),
+	}))
 
-	newValue, ok := value.(dto.RecordPut)
-	if !ok {
-		return fmt.Errorf("expected RecordPut dto")
-	}
-
-	oldValue.SubDomain = newValue.SubDomain
-	oldValue.Target = newValue.Target
-	oldValue.Ttl = newValue.Ttl
-
-	f.responses[url] = oldValue
-
-	return nil
-}
-
-func TestGetDnsZones(t *testing.T) {
-	client := &fakeClient{
-		responses: map[string]any{
-			"/domain/zone/example.com/record?fieldType=A&subDomain=":    []int{1},
-			"/domain/zone/example.com/record/1":                         newARecordDto("1.2.3.4"),
-			"/domain/zone/example.com/record?fieldType=AAAA&subDomain=": []int{2},
-			"/domain/zone/example.com/record/2":                         newAAAARecordDto("2001:db8::1"),
-			"/domain/zone/example.net/record?fieldType=A&subDomain=":    []int{3},
-			"/domain/zone/example.net/record/3":                         newARecordDto("5.6.7.8"),
-			"/domain/zone/example.net/record?fieldType=AAAA&subDomain=": []int{4},
-			"/domain/zone/example.net/record/4":                         newAAAARecordDto("2001:db8::2"),
-		},
-	}
-
-	ovh := NewFromClient(client, false)
-	got, err := ovh.GetDnsZones(context.Background(), []string{"example.com", "example.net"})
+	a, err := ovh.GetRecord(context.Background(), "example.com", model.RecordA, "")
 	if err != nil {
-		t.Fatalf("GetDnsZones returned error: %v", err)
+		t.Fatalf("GetRecord(A) returned error: %v", err)
+	}
+	if !a.Target.Equal(net.ParseIP("1.2.3.4")) {
+		t.Errorf("unexpected ipv4: %v", a.Target)
 	}
 
-	if len(got) != 2 {
-		t.Fatalf("expected 2 domains, got %d", len(got))
-	}
-
-	v4 := got["example.com"].A.Target
-	v6 := got["example.com"].AAAA.Target
-	if !v4.Equal(net.ParseIP("1.2.3.4")) {
-		t.Fatalf("unexpected ipv4 for example.com: %v", v4)
-	}
-	if !v6.Equal(net.ParseIP("2001:db8::1")) {
-		t.Fatalf("unexpected ipv6 for example.com: %v", v6)
-	}
-
-	v4 = got["example.net"].A.Target
-	v6 = got["example.net"].AAAA.Target
-	if !v4.Equal(net.ParseIP("5.6.7.8")) {
-		t.Fatalf("unexpected ipv4 for example.net: %v", v4)
-	}
-	if !v6.Equal(net.ParseIP("2001:db8::2")) {
-		t.Fatalf("unexpected ipv6 for example.net: %v", v6)
-	}
-}
-
-func TestGetDnsZonesReturnNilAddrWhenNoRecord(t *testing.T) {
-	client := &fakeClient{
-		responses: map[string]any{
-			"/domain/zone/example.com/record?fieldType=A&subDomain=":    []int{},
-			"/domain/zone/example.com/record?fieldType=AAAA&subDomain=": []int{2},
-			"/domain/zone/example.com/record/2":                         newAAAARecordDto("2001:db8::1"),
-		},
-	}
-
-	ovh := NewFromClient(client, false)
-	zones, err := ovh.GetDnsZones(context.Background(), []string{"example.com"})
+	aaaa, err := ovh.GetRecord(context.Background(), "example.com", model.RecordAAAA, "")
 	if err != nil {
-		t.Fatalf("expected no error, got %s", err)
+		t.Fatalf("GetRecord(AAAA) returned error: %v", err)
 	}
-
-	if zones["example.com"].A != nil {
-		t.Fatalf("expected no A record")
+	if !aaaa.Target.Equal(net.ParseIP("2001:db8::1")) {
+		t.Errorf("unexpected ipv6: %v", aaaa.Target)
 	}
 }
+
+func TestGetRecordNoRecord(t *testing.T) {
+	ovh, _ := newTestOvh(t, false, routes(map[string]any{
+		"GET /domain/zone/example.com/record?fieldType=A&subDomain=": []int{},
+	}))
+
+	_, err := ovh.GetRecord(context.Background(), "example.com", model.RecordA, "")
+	if !errors.Is(err, ErrNoRecord) {
+		t.Fatalf("expected ErrNoRecord, got %v", err)
+	}
+}
+
+func TestGetRecordMultipleRecords(t *testing.T) {
+	ovh, _ := newTestOvh(t, false, routes(map[string]any{
+		"GET /domain/zone/example.com/record?fieldType=A&subDomain=": []int{1, 2},
+	}))
+
+	_, err := ovh.GetRecord(context.Background(), "example.com", model.RecordA, "")
+	if !errors.Is(err, ErrMultipleRecords) {
+		t.Fatalf("expected ErrMultipleRecords, got %v", err)
+	}
+}
+
+func TestGetRecordAPIError(t *testing.T) {
+	ovh, _ := newTestOvh(t, false, func(recordedRequest) (int, any) {
+		return http.StatusInternalServerError, map[string]string{"message": "boom"}
+	})
+
+	_, err := ovh.GetRecord(context.Background(), "example.com", model.RecordA, "")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// PostRecord
+// ---------------------------------------------------------------------------
 
 func TestPostRecord(t *testing.T) {
-	ovh := NewFromClient(&fakeClient{
-		responses: map[string]any{},
-	}, false)
+	ovh, ft := newTestOvh(t, false, func(recordedRequest) (int, any) {
+		return http.StatusOK, dto.Record{
+			Id:        42,
+			FieldType: model.RecordA,
+			Target:    net.ParseIP("1.2.3.4"),
+		}
+	})
 
-	r, err := ovh.PostARecord(context.Background(), "example.com", net.ParseIP("1.2.3.4"))
+	got, err := ovh.PostRecord(context.Background(), model.Record{
+		Zone:   "example.com",
+		Type:   model.RecordA,
+		Target: net.ParseIP("1.2.3.4"),
+	})
 	if err != nil {
-		t.Errorf("expected no error, got %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if r.Id != 0 {
-		t.Errorf("expected id 0, got %v", r.Id)
+	if got.Id != 42 {
+		t.Errorf("expected id 42, got %d", got.Id)
 	}
 
-	r, err = ovh.PostAAAARecord(context.Background(), "example.com", net.ParseIP("2001:db8::1"))
-	if err != nil {
-		t.Errorf("expected no error, got %v", err)
+	if len(ft.requests) != 1 {
+		t.Fatalf("expected 1 request, got %d", len(ft.requests))
 	}
-	if r.Id != 1 {
-		t.Errorf("expected id 1, got %v", r.Id)
+	req := ft.requests[0]
+	if req.Method != http.MethodPost || req.Path != "/domain/zone/example.com/record" {
+		t.Errorf("unexpected request: %s %s", req.Method, req.Path)
+	}
+
+	// Keys are OVH's API field names; they must match the json tags on dto.RecordPost.
+	var sent map[string]any
+	if err := json.Unmarshal(req.Body, &sent); err != nil {
+		t.Fatal(err)
+	}
+	if sent["fieldType"] != "A" || sent["target"] != "1.2.3.4" {
+		t.Errorf("unexpected body: %s", req.Body)
 	}
 }
 
+func TestPostRecordAPIError(t *testing.T) {
+	ovh, _ := newTestOvh(t, false, func(recordedRequest) (int, any) {
+		return http.StatusInternalServerError, map[string]string{"message": "boom"}
+	})
+
+	_, err := ovh.PostRecord(context.Background(), model.Record{
+		Zone: "example.com",
+		Type: model.RecordA,
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// PutRecord
+// ---------------------------------------------------------------------------
+
+func TestPutRecord(t *testing.T) {
+	ovh, ft := newTestOvh(t, false, func(recordedRequest) (int, any) {
+		return http.StatusNoContent, nil // OVH returns no body on PUT
+	})
+
+	err := ovh.PutRecord(context.Background(), model.Record{
+		Id:     7,
+		Zone:   "example.com",
+		Type:   model.RecordAAAA,
+		Target: net.ParseIP("2001:db8::1"),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(ft.requests) != 1 {
+		t.Fatalf("expected 1 request, got %d", len(ft.requests))
+	}
+	req := ft.requests[0]
+	if req.Method != http.MethodPut || req.Path != "/domain/zone/example.com/record/7" {
+		t.Errorf("unexpected request: %s %s", req.Method, req.Path)
+	}
+
+	var sent map[string]any
+	if err := json.Unmarshal(req.Body, &sent); err != nil {
+		t.Fatal(err)
+	}
+	if sent["target"] != "2001:db8::1" {
+		t.Errorf("unexpected body: %s", req.Body)
+	}
+}
+
+func TestPutRecordAPIError(t *testing.T) {
+	ovh, _ := newTestOvh(t, false, func(recordedRequest) (int, any) {
+		return http.StatusNotFound, map[string]string{"message": "not found"}
+	})
+
+	err := ovh.PutRecord(context.Background(), model.Record{
+		Id:   7,
+		Zone: "example.com",
+		Type: model.RecordA,
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Refresh
+// ---------------------------------------------------------------------------
+
+func TestRefresh(t *testing.T) {
+	ovh, ft := newTestOvh(t, false, func(recordedRequest) (int, any) {
+		return http.StatusOK, nil
+	})
+
+	if err := ovh.Refresh(context.Background(), "example.com"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(ft.requests) != 1 {
+		t.Fatalf("expected 1 request, got %d", len(ft.requests))
+	}
+	if got := ft.requests[0]; got.Method != http.MethodPost || got.Path != "/domain/zone/example.com/refresh" {
+		t.Errorf("unexpected request: %s %s", got.Method, got.Path)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Dry run
+// ---------------------------------------------------------------------------
+
+func TestDryRunMakesNoRequests(t *testing.T) {
+	ovh, ft := newTestOvh(t, true, func(recordedRequest) (int, any) {
+		t.Error("handler must not be called in dry run")
+		return http.StatusOK, nil
+	})
+
+	ctx := context.Background()
+	r := model.Record{
+		Id:     1,
+		Zone:   "example.com",
+		Type:   model.RecordA,
+		Target: net.ParseIP("1.2.3.4"),
+	}
+
+	if _, err := ovh.PostRecord(ctx, r); err != nil {
+		t.Fatal(err)
+	}
+	if err := ovh.PutRecord(ctx, r); err != nil {
+		t.Fatal(err)
+	}
+	if err := ovh.Refresh(ctx, "example.com"); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(ft.requests) != 0 {
+		t.Errorf("expected no requests, got %d", len(ft.requests))
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
+// ---------------------------------------------------------------------------
 
 func newARecordDto(target string) dto.Record {
 	return dto.Record{

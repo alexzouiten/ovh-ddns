@@ -13,14 +13,8 @@ import (
 	ovhapi "github.com/ovh/go-ovh/ovh"
 )
 
-type ovhClient interface {
-	GetWithContext(ctx context.Context, url string, resType any) error
-	PostWithContext(ctx context.Context, url string, reqBody, resType any) error
-	PutWithContext(ctx context.Context, url string, reqBody, resType any) error
-}
-
 type Ovh struct {
-	client ovhClient
+	client *ovhapi.Client
 	dryRun bool
 }
 
@@ -38,7 +32,7 @@ func New(auth config.Auth, dryRun bool) (*Ovh, error) {
 	return NewFromClient(client, dryRun), nil
 }
 
-func NewFromClient(client ovhClient, dryRun bool) *Ovh {
+func NewFromClient(client *ovhapi.Client, dryRun bool) *Ovh {
 	return &Ovh{
 		client: client,
 		dryRun: dryRun,
