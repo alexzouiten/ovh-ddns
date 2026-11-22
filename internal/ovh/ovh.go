@@ -56,7 +56,7 @@ func (ovh *Ovh) GetRecord(ctx context.Context, zoneName string, recordType model
 	}
 
 	if len(ids) == 0 {
-		return nil, ErrNoRecord
+		return nil, nil
 	}
 	if len(ids) > 1 {
 		return nil, ErrMultipleRecords

@@ -131,9 +131,12 @@ func TestGetRecordNoRecord(t *testing.T) {
 		"GET /domain/zone/example.com/record?fieldType=A&subDomain=": []int{},
 	}))
 
-	_, err := ovh.GetRecord(context.Background(), "example.com", model.RecordA, "")
-	if !errors.Is(err, ErrNoRecord) {
-		t.Fatalf("expected ErrNoRecord, got %v", err)
+	record, err := ovh.GetRecord(context.Background(), "example.com", model.RecordA, "")
+	if record != nil {
+		t.Errorf("expected returned record to be nil")
+	}
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
 	}
 }
 
