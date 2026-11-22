@@ -28,10 +28,10 @@ type Config struct {
 }
 
 type Record struct {
-	Zone      string
-	Subdomain string
-	Types     []model.RecordType
-	Ttl       int
+	Zone      string             `yaml:"zone"`
+	Subdomain string             `yaml:"subdomain"`
+	Types     []model.RecordType `yaml:"types"`
+	Ttl       int                `yaml:"ttl"`
 }
 
 type Auth struct {
