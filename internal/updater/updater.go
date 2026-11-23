@@ -26,6 +26,8 @@ type Updater struct {
 	zonesToRefreshLock sync.Mutex
 }
 
+type zone map[model.RecordType]*model.Record
+
 func New(f *fetcher.Fetcher, o *ovh.Ovh, cfg config.Config) *Updater {
 	return &Updater{
 		fetcher: f,
@@ -122,8 +124,8 @@ func (u *Updater) updateRecords(ctx context.Context, ips model.Ips, recordCfg co
 	return eg.Wait()
 }
 
-func (u *Updater) getCurrentRecord(ctx context.Context, recordCfg config.Record) (map[model.RecordType]*model.Record, error) {
-	ret := make(map[model.RecordType]*model.Record)
+func (u *Updater) getCurrentRecord(ctx context.Context, recordCfg config.Record) (zone, error) {
+	ret := make(zone)
 
 	eg, egCtx := errgroup.WithContext(ctx)
 	for _, recordType := range recordCfg.Types {
