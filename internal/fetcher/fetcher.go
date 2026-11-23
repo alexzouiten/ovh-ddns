@@ -17,9 +17,8 @@ type client struct {
 }
 
 type Fetcher struct {
-	providerUrl string
-	v4Client    *client
-	v6Client    *client
+	v4Client *client
+	v6Client *client
 }
 
 func NewFetcher() *Fetcher {
@@ -65,7 +64,9 @@ func (c *client) fetchIp(ip *net.IP, ctx context.Context, providerUrl string) er
 	if err != nil {
 		return fmt.Errorf("ip fetch(%s): failed to get ip: %w", c.transport, err)
 	}
-	defer res.Body.Close()
+	defer func() {
+		_ = res.Body.Close()
+	}()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
