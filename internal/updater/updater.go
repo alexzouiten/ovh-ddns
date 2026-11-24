@@ -99,15 +99,7 @@ func (u *Updater) updateRecords(ctx context.Context, ips model.Ips, recordCfg co
 	eg, egCtx := errgroup.WithContext(ctx)
 	for recordType, record := range currentRecords {
 		eg.Go(func() error {
-			var ip net.IP
-			switch recordType {
-			case model.RecordA:
-				ip = ips.V4
-			case model.RecordAAAA:
-				ip = ips.V6
-			default:
-				panic("unhandled record type")
-			}
+			ip := ips.ForRecordType(recordType)
 
 			if record == nil {
 				return u.createRecord(egCtx, ip, recordType, recordCfg)

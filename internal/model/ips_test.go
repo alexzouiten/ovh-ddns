@@ -25,3 +25,18 @@ func TestIpsEqual(t *testing.T) {
 		t.Fatal("IPs should not be equal")
 	}
 }
+
+func TestForRecordType(t *testing.T) {
+	ips := Ips{
+		V4: net.ParseIP("123.123.123.123"),
+		V6: net.ParseIP("2001:db8::4"),
+	}
+
+	if !ips.ForRecordType(RecordA).Equal(ips.V4) {
+		t.Errorf("expected IPv4 to be returned")
+	}
+
+	if !ips.ForRecordType(RecordAAAA).Equal(ips.V6) {
+		t.Errorf("expected IPv6 to be returned")
+	}
+}
