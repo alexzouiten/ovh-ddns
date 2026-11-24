@@ -84,10 +84,10 @@ func (u *Updater) RunUpdate(ctx context.Context) error {
 }
 
 func (u *Updater) updateRecords(ctx context.Context, ips model.Ips, recordCfg config.Record) error {
-	if ips.V4.IsUnspecified() && slices.Contains(recordCfg.Types, model.RecordA) {
+	if ips.V4 == nil && slices.Contains(recordCfg.Types, model.RecordA) {
 		return ErrNoV4Address
 	}
-	if ips.V6.IsUnspecified() && slices.Contains(recordCfg.Types, model.RecordAAAA) {
+	if ips.V6 == nil && slices.Contains(recordCfg.Types, model.RecordAAAA) {
 		return ErrNoV6Address
 	}
 
@@ -109,6 +109,7 @@ func (u *Updater) updateRecords(ctx context.Context, ips model.Ips, recordCfg co
 				slog.Debug("up to date record, skipping update", "zone", record.Zone, "type", recordType)
 				return nil
 			}
+
 			return u.updateRecord(egCtx, ip, *record)
 		})
 	}
