@@ -2,10 +2,12 @@ package fetcher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"syscall"
 
 	"github.com/alexzouiten/ovh-ddns/internal/model"
 	"golang.org/x/sync/errgroup"
@@ -62,6 +64,10 @@ func (c *client) fetchIp(ip *net.IP, ctx context.Context, providerUrl string) er
 
 	res, err := c.Do(req)
 	if err != nil {
+		if isErrNetUnreachable(err) {
+			ip = nil
+			return nil
+		}
 		return fmt.Errorf("ip fetch(%s): failed to get ip: %w", c.transport, err)
 	}
 	defer func() {
@@ -83,4 +89,13 @@ func (c *client) fetchIp(ip *net.IP, ctx context.Context, providerUrl string) er
 	}
 
 	return nil
+}
+
+func isErrNetUnreachable(err error) bool {
+	errno, ok := errors.AsType[syscall.Errno](err)
+	if !ok {
+		return false
+	}
+
+	return errno == syscall.ENETUNREACH
 }
