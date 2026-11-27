@@ -3,17 +3,19 @@ package model
 import (
 	"net"
 	"testing"
+
+	"github.com/alexzouiten/ovh-ddns/internal/utils"
 )
 
 func TestIpsEqual(t *testing.T) {
 	a := Ips{
-		V4: net.ParseIP("123.456.789.123"),
+		V4: net.ParseIP("1.2.3.4"),
 		V6: net.ParseIP("2001:db8::68"),
 	}
 	b := a
 
 	c := Ips{
-		V4: net.ParseIP("987.654.321.987"),
+		V4: net.ParseIP("4.3.2.1"),
 		V6: net.ParseIP("2002:db8::68"),
 	}
 
@@ -24,6 +26,19 @@ func TestIpsEqual(t *testing.T) {
 	if a.Equal(c) {
 		t.Fatal("IPs should not be equal")
 	}
+}
+
+func TestIpsEqual_Nil(t *testing.T) {
+	a := Ips{
+		V4: nil,
+		V6: nil,
+	}
+	b := Ips{
+		V4: net.ParseIP("1.2.3.4"),
+		V6: net.ParseIP("2001:db8::45"),
+	}
+
+	utils.AssertNoPanic(t, func() { a.Equal(b) })
 }
 
 func TestForRecordType(t *testing.T) {
